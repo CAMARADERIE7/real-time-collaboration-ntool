@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Realtime Collaboration Tool</title>
+  <style>
+    /* Reset and base styles */
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background-color: #4a90e2;
+      color: white;
+      padding: 15px 20px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+      user-select: none;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      height: calc(100vh - 60px);
+    }
+    #userList {
+      width: 220px;
+      background: white;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      overflow-y: auto;
+    }
+    #userList h2 {
+      margin-top: 0;
+      font-weight: 600;
+      font-size: 1.2rem;
+      border-bottom: 2px solid #4a90e2;
+      padding-bottom: 10px;
+    }
+    #users {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #users li {
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      background: #e7f0fd;
+      color: #1a73e8;
+      font-weight: 600;
+      box-shadow: inset 0 0 5px rgba(26,115,232,0.2);
+      cursor: default;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+    #users li.you {
+      background: #4a90e2;
+      color: white;
+      box-shadow: none;
+      font-weight: 700;
+    }
+    #editorContainer {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: white;
+      margin: 20px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(74,144,226,0.15);
+      padding: 20px;
+    }
+    #editor {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      border: 2px solid #4a90e2;
+      border-radius: 10px;
+      padding: 15px;
+      font-size: 1.1rem;
+      font-family: 'Courier New', Courier, monospace;
+      line-height: 1.5;
+      color: #222;
+      outline: none;
+      transition: border-color 0.3s ease;
+    }
+    #editor:focus {
+      border-color: #1a73e8;
+      box-shadow: 0 0 8px #1a73e8aa;
+    }
+    footer {
+      text-align: center;
+      padding: 10px;
+      font-size: 0.9rem;
+      color: #666;
+      background: #f7f9fc;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <header>Realtime Collaboration Tool</header>
+  <main>
+    <aside id="userList">
+      <h2>Users Online</h2>
+      <ul id="users"></ul>
+    </aside>
+    <section id="editorContainer">
+      <textarea id="editor" placeholder="Start typing here..."></textarea>
+    </section>
+  </main>
+  <footer>Built with ❤️ by You</footer>
+
+  <script>
+    const ws = new WebSocket(`ws://${location.host}`);
+    const editor = document.getElementById('editor');
+    const usersList = document.getElementById('users');
+    let isTyping = false;
+    let myUserId = '';
+    let users = {};
+
+    // Update the users sidebar UI
+    function updateUsers() {
+      usersList.innerHTML = '';
+      Object.entries(users).forEach(([id, name]) => {
+        const li = document.createElement('li');
+        li.textContent = name;
+        if (id === myUserId) li.classList.add('you');
+        usersList.appendChild(li);
+      });
+    }
+
+    ws.onopen = () => {
+      console.log('Connected to server');
+    };
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+
+      if (message.type === 'welcome') {
+        myUserId = message.userId;
+        users[myUserId] = message.userId; // Just use ID as name for now
+        updateUsers();
+      }
+
+      if (message.type === 'userlist') {
+        users = message.users;
+        updateUsers();
+      }
+
+      if (message.type === 'content') {
+        if (!isTyping && message.userId !== myUserId) {
+          editor.value = message.content;
+        }
+      }
+
+      if (message.type === 'userJoined') {
+        users[message.userId] = message.userId;
+        updateUsers();
+      }
+
+      if (message.type === 'userLeft') {
+        delete users[message.userId];
+        updateUsers();
+      }
+    };
+
+    editor.addEventListener('input', () => {
+      isTyping = true;
+      ws.send(JSON.stringify({ type: 'content', content: editor.value }));
+      setTimeout(() => { isTyping = false; }, 500);
+    });
+  </script>
+</body>
+</html>
